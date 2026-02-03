@@ -168,7 +168,7 @@ class BedrockFilesConfig(BaseAWSLLM, BaseFilesConfig):
         if not bucket_name:
             raise ValueError("S3 bucket_name is required. Set 's3_bucket_name' in litellm_params or AWS_S3_BUCKET_NAME env var")
         
-        aws_region_name = self._get_aws_region_name(optional_params, model)
+        aws_region_name = self._get_aws_region_name(litellm_params, model)
         
         file_data = data.get("file")
         purpose = data.get("purpose")
@@ -180,7 +180,7 @@ class BedrockFilesConfig(BaseAWSLLM, BaseFilesConfig):
         object_name = self.get_object_name(extracted_file_data, purpose)
         
         # S3 endpoint URL format
-        s3_endpoint_url = optional_params.get("s3_endpoint_url") or f"https://s3.{aws_region_name}.amazonaws.com"
+        s3_endpoint_url = litellm_params.get("s3_endpoint_url") or f"https://s3.{aws_region_name}.amazonaws.com"
         
         return f"{s3_endpoint_url}/{bucket_name}/{object_name}"
 
@@ -361,7 +361,7 @@ class BedrockFilesConfig(BaseAWSLLM, BaseFilesConfig):
         signed_headers, signed_body = self._sign_s3_request(
             content=file_content,
             api_base=api_base,
-            optional_params=optional_params,
+            litellm_params=litellm_params,
         )
 
         litellm_params["upload_url"] = api_base
@@ -378,7 +378,7 @@ class BedrockFilesConfig(BaseAWSLLM, BaseFilesConfig):
         self,
         content: str,
         api_base: str,
-        optional_params: dict,
+        litellm_params: dict,
     ) -> Tuple[dict, str]:
         """
         Sign S3 PUT request using the same proven logic as S3Logger.
@@ -395,18 +395,18 @@ class BedrockFilesConfig(BaseAWSLLM, BaseFilesConfig):
 
         # Get AWS credentials using existing methods
         aws_region_name = self._get_aws_region_name(
-            optional_params=optional_params, model=""
+            optional_params=litellm_params, model=""
         )
         credentials = self.get_credentials(
-            aws_access_key_id=optional_params.get("aws_access_key_id"),
-            aws_secret_access_key=optional_params.get("aws_secret_access_key"),
-            aws_session_token=optional_params.get("aws_session_token"),
+            aws_access_key_id=litellm_params.get("aws_access_key_id"),
+            aws_secret_access_key=litellm_params.get("aws_secret_access_key"),
+            aws_session_token=litellm_params.get("aws_session_token"),
             aws_region_name=aws_region_name,
-            aws_session_name=optional_params.get("aws_session_name"),
-            aws_profile_name=optional_params.get("aws_profile_name"),
-            aws_role_name=optional_params.get("aws_role_name"),
-            aws_web_identity_token=optional_params.get("aws_web_identity_token"),
-            aws_sts_endpoint=optional_params.get("aws_sts_endpoint"),
+            aws_session_name=litellm_params.get("aws_session_name"),
+            aws_profile_name=litellm_params.get("aws_profile_name"),
+            aws_role_name=litellm_params.get("aws_role_name"),
+            aws_web_identity_token=litellm_params.get("aws_web_identity_token"),
+            aws_sts_endpoint=litellm_params.get("aws_sts_endpoint"),
         )
         
         # Calculate SHA256 hash of the content (REQUIRED for S3)

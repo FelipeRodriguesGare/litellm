@@ -160,6 +160,9 @@ class CredentialLiteLLMParams(BaseModel):
     aws_secret_access_key: Optional[str] = None
     aws_region_name: Optional[str] = None
     aws_bedrock_runtime_endpoint: Optional[str] = None
+    aws_role_name: Optional[str] = None
+    aws_session_name: Optional[str] = None
+
     ## IBM WATSONX ##
     watsonx_region_name: Optional[str] = None
 
