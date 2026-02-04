@@ -1182,6 +1182,32 @@ class HTTPHandler:
             return getattr(litellm, "sync_transport", None)
 
 
+def _close_http_client_on_evict(key: str, value: Any) -> None:
+    """
+    Callback function to close HTTP clients when they are evicted from the cache.
+    This prevents connection leaks from stale clients.
+    """
+    verbose_logger.debug(f"Closing evicted HTTP client for key: {key}")
+    try:
+        if hasattr(value, "close") and callable(getattr(value, "close")):
+            # Handle both sync and async clients
+            if asyncio.iscoroutinefunction(value.close):
+                # Async close - schedule it on the running loop if possible
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(value.close())
+                except RuntimeError:
+                    # No running event loop, can't properly close async client
+                    verbose_logger.warning(
+                        f"No event loop available to close async client for key: {key}"
+                    )
+            else:
+                # Sync close
+                value.close()
+    except Exception as e:
+        verbose_logger.debug(f"Error closing HTTP client for key {key}: {e}")
+
+
 def get_async_httpx_client(
     llm_provider: Union[LlmProviders, httpxSpecialProvider],
     params: Optional[dict] = None,
@@ -1209,7 +1235,7 @@ def get_async_httpx_client(
     if cache is None:
         from litellm.caching.llm_caching_handler import LLMClientCache
 
-        cache = LLMClientCache()
+        cache = LLMClientCache(on_evict=_close_http_client_on_evict)
         setattr(litellm, "in_memory_llm_clients_cache", cache)
 
     _cached_client = cache.get_cache(_cache_key_name)
@@ -1258,7 +1284,7 @@ def _get_httpx_client(params: Optional[dict] = None) -> HTTPHandler:
     if cache is None:
         from litellm.caching.llm_caching_handler import LLMClientCache
 
-        cache = LLMClientCache()
+        cache = LLMClientCache(on_evict=_close_http_client_on_evict)
         setattr(litellm, "in_memory_llm_clients_cache", cache)
 
     _cached_client = cache.get_cache(_cache_key_name)

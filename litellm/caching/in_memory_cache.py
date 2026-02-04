@@ -12,7 +12,7 @@ import json
 import sys
 import time
 import heapq
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, List, Optional
 
 if TYPE_CHECKING:
     from litellm.types.caching import RedisPipelineIncrementOperation
@@ -32,9 +32,12 @@ class InMemoryCache(BaseCache):
             int
         ] = 600,  # default ttl is 10 minutes. At maximum litellm rate limiting logic requires objects to be in memory for 1 minute
         max_size_per_item: Optional[int] = 1024,  # 1MB = 1024KB
+        on_evict: Optional[Callable[[str, Any], None]] = None,
     ):
         """
         max_size_in_memory [int]: Maximum number of items in cache. done to prevent memory leaks. Use 200 items as a default
+        on_evict: Optional callback function called when an item is evicted from cache.
+                  Receives (key, value) as arguments. Useful for cleanup (e.g., closing HTTP clients).
         """
         self.max_size_in_memory = (
             max_size_in_memory if max_size_in_memory is not None else 200
@@ -43,6 +46,7 @@ class InMemoryCache(BaseCache):
         self.max_size_per_item = (
             max_size_per_item or MAX_SIZE_PER_ITEM_IN_MEMORY_CACHE_IN_KB
         )  # 1MB = 1024KB
+        self.on_evict = on_evict
 
         # in-memory cache
         self.cache_dict: dict = {}
@@ -98,9 +102,12 @@ class InMemoryCache(BaseCache):
     def _remove_key(self, key: str) -> None:
         """
         Remove a key from both cache_dict and ttl_dict
+        Calls on_evict callback if provided, to allow cleanup of resources (e.g., closing HTTP clients)
         """
-        self.cache_dict.pop(key, None)
+        value = self.cache_dict.pop(key, None)
         self.ttl_dict.pop(key, None)
+        if value is not None and self.on_evict is not None:
+            self.on_evict(key, value)
 
     def evict_cache(self):
         """
