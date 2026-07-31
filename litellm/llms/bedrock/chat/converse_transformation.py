@@ -1519,16 +1519,10 @@ class AmazonConverseConfig(BaseConfig):
         ## VALIDATE REQUEST
         """
         Bedrock doesn't support tool calling without `tools=` param specified.
+        Inject a dummy tool when tool history exists, matching Anthropic behavior.
         """
         if "tools" not in optional_params and messages is not None and has_tool_call_blocks(messages):
-            if litellm.modify_params:
-                optional_params["tools"] = add_dummy_tool(custom_llm_provider="bedrock_converse")
-            else:
-                raise litellm.UnsupportedParamsError(
-                    message="Bedrock doesn't support tool calling without `tools=` param specified. Pass `tools=` param OR set `litellm.modify_params = True` // `litellm_settings::modify_params: True` to add dummy tool to the request.",
-                    model="",
-                    llm_provider="bedrock",
-                )
+            optional_params["tools"] = add_dummy_tool(custom_llm_provider="bedrock_converse")
 
         # Drop thinking param if thinking is enabled but thinking_blocks are missing
         # This prevents the error: "Expected thinking or redacted_thinking, but found tool_use"

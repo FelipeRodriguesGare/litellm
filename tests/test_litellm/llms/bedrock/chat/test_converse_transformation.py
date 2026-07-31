@@ -611,6 +611,53 @@ def test_transform_request_helper_includes_anthropic_beta_and_tools():
     assert fields["tools"][0]["type"] == "computer_20250124"
 
 
+def test_transform_request_helper_injects_dummy_tool_for_tool_history():
+    """
+    Test that _transform_request_helper injects a dummy tool when messages
+    contain tool_calls but no tools are provided.
+
+    This matches Anthropic behavior and prevents Bedrock from raising:
+    "Bedrock doesn't support tool calling without `tools=` param specified."
+
+    Related issues: https://github.com/BerriAI/litellm/issues/5388,
+    https://github.com/BerriAI/litellm/issues/5747
+    """
+    config = AmazonConverseConfig()
+    messages = [
+        {"role": "user", "content": "What's the weather?"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_123",
+                    "type": "function",
+                    "function": {"name": "get_weather", "arguments": "{}"},
+                }
+            ],
+        },
+        {"role": "tool", "content": "Sunny", "tool_call_id": "call_123"},
+        {"role": "user", "content": "Please give a final answer."},
+    ]
+
+    # Save original modify_params setting to verify fix works without it.
+    original_modify_params = litellm.modify_params
+    try:
+        litellm.modify_params = False
+        data = config._transform_request_helper(
+            model="anthropic.claude-sonnet-4-5-20250929-v1:0",
+            system_content_blocks=[],
+            optional_params={},
+            messages=messages,
+        )
+
+        assert "toolConfig" in data
+        assert len(data["toolConfig"]["tools"]) == 1
+        assert data["toolConfig"]["tools"][0]["toolSpec"]["name"] == "dummy_tool"
+    finally:
+        litellm.modify_params = original_modify_params
+
+
 def test_parallel_tool_calls_config_kept_for_sonnet_5():
     old_env = os.environ.get("LITELLM_LOCAL_MODEL_COST_MAP")
     old_cost = litellm.model_cost
